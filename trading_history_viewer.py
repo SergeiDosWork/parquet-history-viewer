@@ -44,7 +44,7 @@ class TradingHistoryViewer(QMainWindow):
         # Timeframe selector
         toolbar_layout.addWidget(QLabel("Timeframe:"))
         self.timeframe_combo = QComboBox()
-        self.timeframe_combo.addItems(['1min', '5min', '15min', '30min', '1H', '4H', '1D'])
+        self.timeframe_combo.addItems(['1min', '3min', '5min', '15min', '30min', '1H', '4H', '1D'])
         self.timeframe_combo.currentTextChanged.connect(self.change_timeframe)
         toolbar_layout.addWidget(self.timeframe_combo)
         
@@ -120,7 +120,7 @@ class TradingHistoryViewer(QMainWindow):
                         'high': ['high_price', 'highprice'],
                         'low': ['low_price', 'lowprice'],
                         'close': ['close_price', 'closeprice'],
-                        'volume': ['vol', 'amount', 'qty', 'quantity']
+                        'volume': ['vol', 'amount', 'qty', 'quantity', 'tick_volume']
                     }
                     
                     for req_col, alts in price_mappings.items():
@@ -195,6 +195,7 @@ class TradingHistoryViewer(QMainWindow):
         """Convert our timeframe to pandas frequency string"""
         freq_map = {
             '1min': '1T',
+            '3min': '3T',
             '5min': '5T',
             '15min': '15T',
             '30min': '30T',
