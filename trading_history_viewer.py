@@ -93,23 +93,77 @@ class TradingHistoryViewer(QMainWindow):
         
         if file_path:
             try:
-                # Load the parquet file
-                self.data = pq.read_table(file_path).to_pandas()
+                # Load the parquet file using PyArrow
+                table = pq.read_table(file_path)
+                self.data = table.to_pandas()
                 
                 # Ensure required columns exist
                 required_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
                 missing_cols = [col for col in required_cols if col not in self.data.columns]
                 
+                # Check for alternative column names that might be used
                 if missing_cols:
-                    raise ValueError(f"Missing required columns: {missing_cols}")
+                    # Try to map common alternative names
+                    column_mapping = {}
+                    
+                    # Look for possible timestamp alternatives
+                    timestamp_alts = ['time', 'date', 'datetime', 'dt']
+                    for alt in timestamp_alts:
+                        if alt in self.data.columns:
+                            column_mapping[alt] = 'timestamp'
+                            missing_cols.remove('timestamp')
+                            break
+                    
+                    # Look for price alternatives
+                    price_mappings = {
+                        'open': ['open_price', 'openprice'],
+                        'high': ['high_price', 'highprice'],
+                        'low': ['low_price', 'lowprice'],
+                        'close': ['close_price', 'closeprice'],
+                        'volume': ['vol', 'amount', 'qty', 'quantity']
+                    }
+                    
+                    for req_col, alts in price_mappings.items():
+                        if req_col in missing_cols:
+                            for alt in alts:
+                                if alt in self.data.columns:
+                                    column_mapping[alt] = req_col
+                                    missing_cols.remove(req_col)
+                                    break
+                
+                if missing_cols:
+                    raise ValueError(f"Missing required columns: {missing_cols}. "
+                                   f"Available columns: {list(self.data.columns)}")
+                
+                # Rename columns if needed
+                if column_mapping:
+                    self.data = self.data.rename(columns=column_mapping)
+                
+                # Ensure timestamp is datetime type
+                if not pd.api.types.is_datetime64_any_dtype(self.data['timestamp']):
+                    self.data['timestamp'] = pd.to_datetime(self.data['timestamp'])
                 
                 # Sort by timestamp
-                self.data['timestamp'] = pd.to_datetime(self.data['timestamp'])
                 self.data = self.data.sort_values('timestamp').reset_index(drop=True)
+                
+                # Remove any rows with NaN values in critical columns
+                self.data = self.data.dropna(subset=['open', 'high', 'low', 'close', 'volume'])
+                
+                # Validate data ranges
+                invalid_data = (
+                    (self.data['high'] < self.data['low']) |
+                    (self.data['high'] < self.data['open']) |
+                    (self.data['high'] < self.data['close']) |
+                    (self.data['low'] > self.data['open']) |
+                    (self.data['low'] > self.data['close'])
+                )
+                if invalid_data.any():
+                    self.data = self.data[~invalid_data]
+                    self.status_bar.showMessage("Warning: Invalid OHLC data was removed")
                 
                 # Update UI
                 self.file_label.setText(f"File: {file_path.split('/')[-1]} ({len(self.data)} records)")
-                self.status_bar.showMessage(f"Loaded {len(self.data)} records from {file_path}")
+                self.status_bar.showMessage(f"Loaded {len(self.data)} records from {file_path} successfully")
                 
                 # Apply initial timeframe filter
                 self.apply_timeframe_filter()
@@ -117,6 +171,7 @@ class TradingHistoryViewer(QMainWindow):
                 
             except Exception as e:
                 self.status_bar.showMessage(f"Error loading file: {str(e)}")
+                print(f"Detailed error: {e}")  # For debugging
 
     def apply_timeframe_filter(self):
         """Apply the selected timeframe to the data"""
