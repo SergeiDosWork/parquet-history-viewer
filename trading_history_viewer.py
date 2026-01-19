@@ -254,6 +254,9 @@ class TradingHistoryViewer(QMainWindow):
         scene_height = 600
         self.scene.setSceneRect(0, 0, scene_width, scene_height)
 
+        # Draw grid
+        self.draw_grid(scene_width, scene_height, min_price, max_price, price_range)
+
         # Draw each candlestick
         bar_width = 15 * self.scale_factor
         for i, (_, row) in enumerate(visible_data.iterrows()):
@@ -282,6 +285,45 @@ class TradingHistoryViewer(QMainWindow):
             rect = QRectF(x_pos, body_top, bar_width, body_height)
             brush = QBrush(color)
             self.scene.addRect(rect, color, brush)
+
+            # Draw time label under every nth candlestick to avoid clutter
+            if i % max(1, int(10 / self.scale_factor)) == 0:  # Adjust frequency based on zoom level
+                time_text = row['timestamp'].strftime('%H:%M\n%m-%d')
+                text_item = self.scene.addText(time_text)
+                text_item.setPos(x_pos, scene_height - 40)  # Position text below the chart
+                text_item.setDefaultTextColor(QColor(150, 150, 150))
+
+    def draw_grid(self, scene_width, scene_height, min_price, max_price, price_range):
+        """Draw grid lines on the chart"""
+        # Draw horizontal grid lines for price levels
+        num_horizontal_lines = 10
+        for i in range(num_horizontal_lines + 1):
+            y_pos = (scene_height / num_horizontal_lines) * i
+            price_level = max_price - (i * price_range / num_horizontal_lines)
+            
+            # Draw horizontal line
+            grid_pen = QColor(50, 50, 50)
+            grid_pen.setAlpha(100)  # Semi-transparent
+            self.scene.addLine(0, y_pos, scene_width, y_pos, grid_pen)
+            
+            # Add price label on the left side
+            price_text = f"{price_level:.2f}"
+            text_item = self.scene.addText(price_text)
+            text_item.setPos(0, y_pos - 10)
+            text_item.setDefaultTextColor(QColor(150, 150, 150))
+
+        # Draw vertical grid lines for time intervals
+        num_visible_candles = len(self.filtered_data.iloc[self.start_index:self.start_index + self.visible_count])
+        if num_visible_candles > 0:
+            candle_spacing = 20 * self.scale_factor
+            num_vertical_lines = min(int(scene_width / (candle_spacing * 5)), 20)  # Limit number of vertical lines
+            
+            for i in range(num_vertical_lines + 1):
+                if i * 5 < num_visible_candles:  # Make sure we don't exceed available candles
+                    x_pos = i * 5 * candle_spacing
+                    grid_pen = QColor(50, 50, 50)
+                    grid_pen.setAlpha(100)  # Semi-transparent
+                    self.scene.addLine(x_pos, 0, x_pos, scene_height, grid_pen)
 
 
 def main():
